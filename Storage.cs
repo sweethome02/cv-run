@@ -37,18 +37,28 @@ public class Storage : IDisposable
         {
             // Column already exists — migration is a no-op
         }
+
+        // Migration: add name column for DBs created before v3
+        try
+        {
+            using var migrate = _db.CreateCommand();
+            migrate.CommandText = "ALTER TABLE items ADD COLUMN name TEXT DEFAULT ''";
+            migrate.ExecuteNonQuery();
+        }
+        catch { }
     }
 
     public void Save(ClipboardItem item)
     {
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT OR IGNORE INTO items VALUES (@id,@type,@fmt,@content,@pin,@ts)";
+        cmd.CommandText = "INSERT OR IGNORE INTO items VALUES (@id,@type,@fmt,@content,@pin,@ts,@name)";
         cmd.Parameters.AddWithValue("@id", item.Id);
         cmd.Parameters.AddWithValue("@type", item.Type);
         cmd.Parameters.AddWithValue("@fmt", item.Format);
         cmd.Parameters.AddWithValue("@content", item.Content);
         cmd.Parameters.AddWithValue("@pin", item.IsPinned ? 1 : 0);
         cmd.Parameters.AddWithValue("@ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        cmd.Parameters.AddWithValue("@name", item.Name);
         cmd.ExecuteNonQuery();
     }
 
@@ -56,7 +66,7 @@ public class Storage : IDisposable
     {
         var items = new List<ClipboardItem>();
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT id,type,format,content,is_pinned,created_at FROM items ORDER BY created_at DESC LIMIT @n";
+        cmd.CommandText = "SELECT id,type,format,content,name,is_pinned,created_at FROM items ORDER BY created_at DESC LIMIT @n";
         cmd.Parameters.AddWithValue("@n", limit);
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -66,8 +76,9 @@ public class Storage : IDisposable
                 Type = r.GetString(1),
                 Format = r.GetString(2),
                 Content = r.GetString(3),
-                IsPinned = r.GetInt32(4) != 0,
-                CreatedAt = r.GetInt64(5)
+                Name = r.IsDBNull(4) ? "" : r.GetString(4),
+                IsPinned = r.GetInt32(5) != 0,
+                CreatedAt = r.GetInt64(6)
             });
         return items;
     }

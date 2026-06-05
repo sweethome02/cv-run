@@ -148,6 +148,7 @@ public partial class App : Application
     {
         if (msg == NativeMethods.WM_CLIPBOARDUPDATE)
         {
+            // WndProc runs on UI thread — no Dispatcher.Invoke needed.
             ReadClipboard();
             handled = true;
         }
@@ -159,68 +160,118 @@ public partial class App : Application
         return IntPtr.Zero;
     }
 
-    static BitmapEncoder SelectEncoder(BitmapSource bmp)
-    {
-        // Always use PNG as storage format — lossless, handles alpha,
-        // supports all pixel formats, zero encoding failures.
-        return new PngBitmapEncoder();
-    }
-
     void ReadClipboard()
     {
-        Dispatcher.Invoke(() =>
+        if (DateTime.Now < _selfIgnoreUntil) return;
+        try
         {
-            if (DateTime.Now < _selfIgnoreUntil) return;
-            try
-            {
-                // Check image FIRST — many apps put text alongside images
-                // (URL, file path, alt text), so ContainsText would
-                // match before we ever reach ContainsImage.
-                if (Clipboard.ContainsImage())
-                {
-                    var bmp = Clipboard.GetImage();
-                    if (bmp != null && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
-                    {
-                        using var ms = new MemoryStream();
-                        var encoder = new PngBitmapEncoder();
-                        encoder.Frames.Add(BitmapFrame.Create(bmp));
-                        encoder.Save(ms);
+            var dataObj = Clipboard.GetDataObject();
+            if (dataObj == null) return;
 
-                        var b64 = Convert.ToBase64String(ms.ToArray());
-                        var item = new ClipboardItem
-                        {
-                            Id = Guid.NewGuid().ToString("N"),
-                            Type = "image",
-                            Format = "png",
-                            Content = b64,
-                        };
-                        _store.Save(item);
-                        _main.OnClipAdded(item);
-                        Logger.Info("剪贴板", $"捕获图片 size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
-                    }
-                }
-                else if (Clipboard.ContainsText())
-                {
-                    var text = Clipboard.GetText().Trim();
-                    if (!string.IsNullOrEmpty(text))
-                    {
-                        var item = new ClipboardItem
-                        {
-                            Id = Guid.NewGuid().ToString("N"),
-                            Type = "text",
-                            Content = text,
-                        };
-                        _store.Save(item);
-                        _main.OnClipAdded(item);
-                        Logger.Info("剪贴板", $"捕获文本 len={text.Length}");
-                    }
-                }
-            }
-            catch (Exception ex)
+            // Check for image data (Browser / screenshot / file copy)
+            bool isImage = dataObj.GetDataPresent("Bitmap");
+            bool isDib = dataObj.GetDataPresent("DeviceIndependentBitmap");
+            bool isFileDrop = dataObj.GetDataPresent("FileDrop");
+
+            if (isImage || isDib || isFileDrop)
             {
-                Logger.Error("ReadClipboard", ex.Message);
+                BitmapSource? bmp = null;
+
+                // 1) Try Bitmap format (most common for browser copy-image / screenshots)
+                if (isImage)
+                {
+                    try { bmp = Clipboard.GetImage(); } catch { }
+                }
+
+                // 2) Try FileDrop — read file bytes directly (preserves original format)
+                if (bmp == null && isFileDrop)
+                {
+                    try
+                    {
+                        var files = (string[])dataObj.GetData("FileDrop");
+                        if (files != null && files.Length > 0)
+                        {
+                            var ext = Path.GetExtension(files[0]).ToLowerInvariant();
+                            if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".tiff" or ".tif" or ".webp")
+                            {
+                                var rawBytes = File.ReadAllBytes(files[0]);
+                                // Store raw bytes directly — can decode on paste
+                                var b64 = Convert.ToBase64String(rawBytes);
+                                var item = new ClipboardItem
+                                {
+                                    Id = Guid.NewGuid().ToString("N"),
+                                    Type = "image",
+                                    Format = ext.TrimStart('.'),
+                                    Name = Path.GetFileName(files[0]),
+                                    Content = b64,
+                                };
+                                _store.Save(item);
+                                _main.OnClipAdded(item);
+                                Logger.Info("剪贴板", $"捕获图片文件 {files[0]} format={item.Format} raw={rawBytes.Length}B");
+                                return;
+                            }
+                        }
+                    }
+                    catch (Exception fex)
+                    {
+                        Logger.Error("剪贴板/FileDrop", fex.Message);
+                    }
+                }
+
+                // 3) DIB fallback — get DIB data and decode
+                if (bmp == null && isDib)
+                {
+                    try
+                    {
+                        bmp = Clipboard.GetImage();
+                    }
+                    catch { }
+                }
+
+                // Encode whatever we got as PNG
+                if (bmp != null && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                {
+                    using var ms = new MemoryStream();
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bmp));
+                    encoder.Save(ms);
+
+                    var b64 = Convert.ToBase64String(ms.ToArray());
+                    var ts = DateTime.Now.ToString("yyyy-MM-dd HH.mm.ss");
+                    var item = new ClipboardItem
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Type = "image",
+                        Format = "png",
+                        Name = $"截图 {ts}",
+                        Content = b64,
+                    };
+                    _store.Save(item);
+                    _main.OnClipAdded(item);
+                    Logger.Info("剪贴板", $"捕获图片 size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
+                }
             }
-        });
+            else if (dataObj.GetDataPresent("Text") || dataObj.GetDataPresent("UnicodeText"))
+            {
+                var text = Clipboard.GetText().Trim();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    var item = new ClipboardItem
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Type = "text",
+                        Content = text,
+                    };
+                    _store.Save(item);
+                    _main.OnClipAdded(item);
+                    Logger.Info("剪贴板", $"捕获文本 len={text.Length}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("ReadClipboard", ex.Message);
+        }
     }
 
     public void OnSystemShutdown()

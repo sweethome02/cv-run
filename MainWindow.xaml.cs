@@ -82,7 +82,9 @@ public partial class MainWindow : Window
             _items.Add(new ItemVM
             {
                 Id = x.Id,
-                DisplayText = x.Type == "image" ? $"[Image/{x.Format.ToUpper()}]" : Truncate(x.Content, 120),
+                DisplayText = x.Type == "image"
+                    ? (string.IsNullOrEmpty(x.Name) ? "[Image]" : x.Name)
+                    : Truncate(x.Content, 120),
                 TimeStr = x.IsPinned ? $"📌 {ts:MM-dd HH:mm}" : $"{ts:MM-dd HH:mm}",
                 TypeLabel = x.Type == "image" ? "🖼" : "📝",
                 IsPinned = x.IsPinned,
@@ -312,15 +314,15 @@ public partial class MainWindow : Window
 
                 if (item.Type == "image")
                 {
-                    // Decode from base64 and set to clipboard as image
                     try
                     {
                         var bytes = Convert.FromBase64String(item.Content);
                         using var ms = new MemoryStream(bytes);
-                        var img = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+                        var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+                        var img = decoder.Frames[0];
                         Clipboard.Clear();
                         Clipboard.SetImage(img);
-                        Logger.Info("粘贴", $"选中粘贴图片 size={img.PixelWidth}x{img.PixelHeight}");
+                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} size={img.PixelWidth}x{img.PixelHeight}");
                     }
                     catch (Exception ex)
                     {
