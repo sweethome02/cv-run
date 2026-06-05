@@ -15,6 +15,7 @@ public class Storage : IDisposable
             CREATE TABLE IF NOT EXISTS items (
                 id TEXT PRIMARY KEY,
                 type TEXT NOT NULL,
+                format TEXT DEFAULT 'png',
                 content TEXT NOT NULL,
                 is_pinned INTEGER DEFAULT 0,
                 created_at INTEGER NOT NULL
@@ -27,9 +28,10 @@ public class Storage : IDisposable
     public void Save(ClipboardItem item)
     {
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT OR IGNORE INTO items VALUES (@id,@type,@content,@pin,@ts)";
+        cmd.CommandText = "INSERT OR IGNORE INTO items VALUES (@id,@type,@fmt,@content,@pin,@ts)";
         cmd.Parameters.AddWithValue("@id", item.Id);
         cmd.Parameters.AddWithValue("@type", item.Type);
+        cmd.Parameters.AddWithValue("@fmt", item.Format);
         cmd.Parameters.AddWithValue("@content", item.Content);
         cmd.Parameters.AddWithValue("@pin", item.IsPinned ? 1 : 0);
         cmd.Parameters.AddWithValue("@ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
@@ -40,7 +42,7 @@ public class Storage : IDisposable
     {
         var items = new List<ClipboardItem>();
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT id,type,content,is_pinned,created_at FROM items ORDER BY created_at DESC LIMIT @n";
+        cmd.CommandText = "SELECT id,type,format,content,is_pinned,created_at FROM items ORDER BY created_at DESC LIMIT @n";
         cmd.Parameters.AddWithValue("@n", limit);
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -48,9 +50,10 @@ public class Storage : IDisposable
             {
                 Id = r.GetString(0),
                 Type = r.GetString(1),
-                Content = r.GetString(2),
-                IsPinned = r.GetInt32(3) != 0,
-                CreatedAt = r.GetInt64(4)
+                Format = r.GetString(2),
+                Content = r.GetString(3),
+                IsPinned = r.GetInt32(4) != 0,
+                CreatedAt = r.GetInt64(5)
             });
         return items;
     }

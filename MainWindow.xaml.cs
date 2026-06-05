@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace ClipNestWpf;
@@ -81,7 +82,7 @@ public partial class MainWindow : Window
             _items.Add(new ItemVM
             {
                 Id = x.Id,
-                DisplayText = x.Type == "image" ? "[Image]" : Truncate(x.Content, 120),
+                DisplayText = x.Type == "image" ? $"[Image/{x.Format.ToUpper()}]" : Truncate(x.Content, 120),
                 TimeStr = x.IsPinned ? $"📌 {ts:MM-dd HH:mm}" : $"{ts:MM-dd HH:mm}",
                 TypeLabel = x.Type == "image" ? "🖼" : "📝",
                 IsPinned = x.IsPinned,
@@ -308,8 +309,45 @@ public partial class MainWindow : Window
             if (item != null)
             {
                 ((App)Application.Current).MarkSelfSetting();
-                Clipboard.SetText(item.Content);
-                Logger.Info("粘贴", $"选中粘贴: \"{Truncate(item.Content, 40)}\"");
+
+                if (item.Type == "image")
+                {
+                    // Decode from base64 and set to clipboard as image
+                    try
+                    {
+                        var bytes = Convert.FromBase64String(item.Content);
+                        using var ms = new MemoryStream(bytes);
+                        BitmapFrame img;
+                        switch (item.Format.ToLowerInvariant())
+                        {
+                            case "jpeg":
+                                img = JpegBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                                break;
+                            case "gif":
+                                img = GifBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                                break;
+                            case "bmp":
+                                img = BmpBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                                break;
+                            case "tiff":
+                                img = TiffBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                                break;
+                            case "png":
+                            default:
+                                img = PngBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                                break;
+                        }
+                        Clipboard.Clear();
+                        Clipboard.SetImage(img);
+                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} len={bytes.Length}");
+                    }
+                    catch { }
+                }
+                else
+                {
+                    Clipboard.SetText(item.Content);
+                    Logger.Info("粘贴", $"选中粘贴: \"{Truncate(item.Content, 40)}\"");
+                }
 
                 if (Docked != DockEdge.None)
                 {

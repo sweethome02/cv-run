@@ -1,7 +1,10 @@
 ﻿using System.Drawing;
+using System.IO;
+using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
-using SWMI = System.Windows.Media.Imaging;
 
 namespace ClipNestWpf;
 
@@ -100,10 +103,10 @@ public partial class App : Application
         using (var g = Graphics.FromImage(bmp))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var brush = new SolidBrush(Color.FromArgb(70, 130, 200));
+            using var brush = new SolidBrush(System.Drawing.Color.FromArgb(70, 130, 200));
             g.FillEllipse(brush, 2, 2, 28, 28);
             using var font = new System.Drawing.Font("Segoe UI", 14, System.Drawing.FontStyle.Bold);
-            using var textBrush = new SolidBrush(Color.White);
+            using var textBrush = new SolidBrush(System.Drawing.Color.White);
             var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString("C", font, textBrush, new RectangleF(0, 0, 32, 32), fmt);
         }
@@ -156,6 +159,24 @@ public partial class App : Application
         return IntPtr.Zero;
     }
 
+    static BitmapEncoder SelectEncoder(BitmapSource bmp)
+    {
+        // Prefer lossless PNG for transparency or indexed color, use JPEG for photos
+        var format = bmp.Format;
+        var hasAlpha = format.BitsPerPixel > 24; // 32-bit = likely has alpha
+        var isIndexed = format.BitsPerPixel <= 8 ||
+                        format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 ||
+                        format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8;
+
+        // Use PNG as safe default (lossless, handles alpha)
+        if (hasAlpha || isIndexed)
+            return new PngBitmapEncoder();
+
+        // For 24-bit images, prefer JPEG (smaller size)
+        // Clipboard images are usually DIB/PNG — JPEG is fine for photos/screenshots
+        return new JpegBitmapEncoder { QualityLevel = 92 };
+    }
+
     void ReadClipboard()
     {
         Dispatcher.Invoke(() =>
@@ -184,14 +205,15 @@ public partial class App : Application
                     if (bmp != null)
                     {
                         using var ms = new MemoryStream();
-                        var encoder = new SWMI.PngBitmapEncoder();
-                        encoder.Frames.Add(SWMI.BitmapFrame.Create(bmp));
+                        var encoder = SelectEncoder(bmp);
+                        encoder.Frames.Add(BitmapFrame.Create(bmp));
                         encoder.Save(ms);
                         var b64 = Convert.ToBase64String(ms.ToArray());
                         var item = new ClipboardItem
                         {
                             Id = Guid.NewGuid().ToString("N"),
                             Type = "image",
+                            Format = encoder.GetType().Name.Replace("BitmapEncoder", "").ToLowerInvariant(),
                             Content = b64,
                         };
                         _store.Save(item);
