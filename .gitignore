@@ -93,3 +93,6 @@ Desktop.ini
 
 # SQLite database
 *.db
+
+# Agent workspace
+.reasonix/

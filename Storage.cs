@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Data.Sqlite;
 
 namespace ClipNestWpf;
@@ -5,10 +6,13 @@ namespace ClipNestWpf;
 public class Storage : IDisposable
 {
     readonly SqliteConnection _db;
+    readonly string _imageDir;
 
-    public Storage(string path)
+    public Storage(string dbPath, string imageDir)
     {
-        _db = new SqliteConnection($"Data Source={path}");
+        _imageDir = imageDir;
+        Directory.CreateDirectory(_imageDir);
+        _db = new SqliteConnection($"Data Source={dbPath}");
         _db.Open();
 
         // Create table (new DB) or migrate (old DB)
@@ -94,14 +98,67 @@ public class Storage : IDisposable
 
     public void Delete(string id)
     {
+        // Delete the image file first (if any)
+        try
+        {
+            using var get = _db.CreateCommand();
+            get.CommandText = "SELECT type,content FROM items WHERE id=@id";
+            get.Parameters.AddWithValue("@id", id);
+            using var r = get.ExecuteReader();
+            if (r.Read() && r.GetString(0) == "image")
+            {
+                var path = r.GetString(1);
+                if (!string.IsNullOrEmpty(path))
+                    DeleteImageFile(path);
+            }
+        }
+        catch { }
+
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "DELETE FROM items WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
     }
 
+    void DeleteImageFile(string content)
+    {
+        // Try as file path (new storage) or skip (old base64 storage)
+        try
+        {
+            var fullPath = Path.Combine(_imageDir, content);
+            if (File.Exists(fullPath))
+                File.Delete(fullPath);
+        }
+        catch { }
+    }
+
+    /// <summary>Get the full file path for a stored image, or null if content is old base64 data.</summary>
+    public string? GetImageFullPath(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return null;
+        var path = Path.Combine(_imageDir, content);
+        return File.Exists(path) ? path : null;
+    }
+
     public void ClearTemp()
     {
+        // Delete image files for unpinned records first
+        try
+        {
+            using var list = _db.CreateCommand();
+            list.CommandText = "SELECT content FROM items WHERE type='image' AND is_pinned=0";
+            using var r = list.ExecuteReader();
+            var paths = new List<string>();
+            while (r.Read())
+            {
+                var c = r.IsDBNull(0) ? "" : r.GetString(0);
+                if (!string.IsNullOrEmpty(c)) paths.Add(c);
+            }
+            foreach (var p in paths)
+                DeleteImageFile(p);
+        }
+        catch { }
+
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "DELETE FROM items WHERE is_pinned=0";
         cmd.ExecuteNonQuery();

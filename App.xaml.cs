@@ -13,6 +13,7 @@ public partial class App : Application
     MainWindow _main = null!;
     IndicatorWindow _indicator = null!;
     Storage _store = null!;
+    string _imageDir = null!;
     System.Windows.Forms.NotifyIcon? _tray;
     IntPtr _hwnd;
     DateTime _selfIgnoreUntil;
@@ -24,9 +25,12 @@ public partial class App : Application
         base.OnStartup(e);
 
         var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
+        var imageDir = Path.Combine(dataDir, "images");
+        _imageDir = imageDir;
         Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(imageDir);
         Logger.CleanupOldLogs();
-        _store = new Storage(Path.Combine(dataDir, "clipnest.db"));
+        _store = new Storage(Path.Combine(dataDir, "clipnest.db"), imageDir);
 
         _main = new MainWindow { Store = _store };
         _indicator = new IndicatorWindow();
@@ -196,15 +200,17 @@ public partial class App : Application
                             if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".tiff" or ".tif" or ".webp")
                             {
                                 var rawBytes = File.ReadAllBytes(files[0]);
-                                // Store raw bytes directly — can decode on paste
-                                var b64 = Convert.ToBase64String(rawBytes);
+                                var id = Guid.NewGuid().ToString("N");
+                                var fileName = $"{id}.{ext.TrimStart('.')}";
+                                var destPath = Path.Combine(_imageDir, fileName);
+                                File.WriteAllBytes(destPath, rawBytes);
                                 var item = new ClipboardItem
                                 {
-                                    Id = Guid.NewGuid().ToString("N"),
+                                    Id = id,
                                     Type = "image",
                                     Format = ext.TrimStart('.'),
                                     Name = Path.GetFileName(files[0]),
-                                    Content = b64,
+                                    Content = fileName,
                                 };
                                 _store.Save(item);
                                 _main.OnClipAdded(item);
@@ -237,19 +243,24 @@ public partial class App : Application
                     encoder.Frames.Add(BitmapFrame.Create(bmp));
                     encoder.Save(ms);
 
-                    var b64 = Convert.ToBase64String(ms.ToArray());
+                    var rawBytes = ms.ToArray();
+                    var id = Guid.NewGuid().ToString("N");
+                    var fileName = $"{id}.png";
+                    var destPath = Path.Combine(_imageDir, fileName);
+                    File.WriteAllBytes(destPath, rawBytes);
+
                     var ts = DateTime.Now.ToString("yyyy-MM-dd HH.mm.ss");
                     var item = new ClipboardItem
                     {
-                        Id = Guid.NewGuid().ToString("N"),
+                        Id = id,
                         Type = "image",
                         Format = "png",
                         Name = $"截图 {ts}",
-                        Content = b64,
+                        Content = fileName,
                     };
                     _store.Save(item);
                     _main.OnClipAdded(item);
-                    Logger.Info("剪贴板", $"捕获图片 size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
+                    Logger.Info("剪贴板", $"捕获图片 size={bmp.PixelWidth}x{bmp.PixelHeight} file={fileName}");
                 }
             }
             else if (dataObj.GetDataPresent("Text") || dataObj.GetDataPresent("UnicodeText"))
