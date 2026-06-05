@@ -18,7 +18,7 @@ public partial class App : Application
     IntPtr _hwnd;
     DateTime _selfIgnoreUntil;
 
-    public void MarkSelfSetting() => _selfIgnoreUntil = DateTime.Now.AddMilliseconds(300);
+    public void MarkSelfSetting() => _selfIgnoreUntil = DateTime.Now.AddMilliseconds(800);
 
     protected override void OnStartup(StartupEventArgs e)
     {

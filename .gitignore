@@ -94,5 +94,9 @@ Desktop.ini
 # SQLite database
 *.db
 
+# Build artifacts
+*.zip
+publish/
+
 # Agent workspace
 .reasonix/

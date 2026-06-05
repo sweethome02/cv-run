@@ -343,6 +343,9 @@ public partial class MainWindow : Window
                             Logger.Info("粘贴", $"选中粘贴图片 (旧数据) size={img.PixelWidth}x{img.PixelHeight}");
                         }
 
+                        // Re-ignore clipboard changes right before we set the image,
+                        // because MarkSelfSetting at the top may have already expired
+                        ((App)Application.Current).MarkSelfSetting();
                         Clipboard.Clear();
                         Clipboard.SetImage(img);
                     }
