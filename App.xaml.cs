@@ -161,20 +161,9 @@ public partial class App : Application
 
     static BitmapEncoder SelectEncoder(BitmapSource bmp)
     {
-        // Prefer lossless PNG for transparency or indexed color, use JPEG for photos
-        var format = bmp.Format;
-        var hasAlpha = format.BitsPerPixel > 24; // 32-bit = likely has alpha
-        var isIndexed = format.BitsPerPixel <= 8 ||
-                        format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 ||
-                        format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8;
-
-        // Use PNG as safe default (lossless, handles alpha)
-        if (hasAlpha || isIndexed)
-            return new PngBitmapEncoder();
-
-        // For 24-bit images, prefer JPEG (smaller size)
-        // Clipboard images are usually DIB/PNG — JPEG is fine for photos/screenshots
-        return new JpegBitmapEncoder { QualityLevel = 92 };
+        // Always use PNG as storage format — lossless, handles alpha,
+        // supports all pixel formats, zero encoding failures.
+        return new PngBitmapEncoder();
     }
 
     void ReadClipboard()
@@ -184,7 +173,33 @@ public partial class App : Application
             if (DateTime.Now < _selfIgnoreUntil) return;
             try
             {
-                if (Clipboard.ContainsText())
+                // Check image FIRST — many apps put text alongside images
+                // (URL, file path, alt text), so ContainsText would
+                // match before we ever reach ContainsImage.
+                if (Clipboard.ContainsImage())
+                {
+                    var bmp = Clipboard.GetImage();
+                    if (bmp != null && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
+                    {
+                        using var ms = new MemoryStream();
+                        var encoder = new PngBitmapEncoder();
+                        encoder.Frames.Add(BitmapFrame.Create(bmp));
+                        encoder.Save(ms);
+
+                        var b64 = Convert.ToBase64String(ms.ToArray());
+                        var item = new ClipboardItem
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Type = "image",
+                            Format = "png",
+                            Content = b64,
+                        };
+                        _store.Save(item);
+                        _main.OnClipAdded(item);
+                        Logger.Info("剪贴板", $"捕获图片 size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
+                    }
+                }
+                else if (Clipboard.ContainsText())
                 {
                     var text = Clipboard.GetText().Trim();
                     if (!string.IsNullOrEmpty(text))
@@ -197,42 +212,7 @@ public partial class App : Application
                         };
                         _store.Save(item);
                         _main.OnClipAdded(item);
-                    }
-                }
-                else if (Clipboard.ContainsImage())
-                {
-                    var bmp = Clipboard.GetImage();
-                    if (bmp != null && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
-                    {
-                        using var ms = new MemoryStream();
-                        BitmapEncoder encoder;
-                        try
-                        {
-                            encoder = SelectEncoder(bmp);
-                            encoder.Frames.Add(BitmapFrame.Create(bmp));
-                            encoder.Save(ms);
-                        }
-                        catch (Exception inner)
-                        {
-                            // Primary encoder failed — fall back to PNG (most compatible)
-                            Logger.Error("图片编码", $"主编码器失败 ({inner.Message})，回退到 PNG");
-                            ms.SetLength(0);
-                            encoder = new PngBitmapEncoder();
-                            encoder.Frames.Add(BitmapFrame.Create(bmp));
-                            encoder.Save(ms);
-                        }
-
-                        var b64 = Convert.ToBase64String(ms.ToArray());
-                        var item = new ClipboardItem
-                        {
-                            Id = Guid.NewGuid().ToString("N"),
-                            Type = "image",
-                            Format = encoder.GetType().Name.Replace("BitmapEncoder", "").ToLowerInvariant(),
-                            Content = b64,
-                        };
-                        _store.Save(item);
-                        _main.OnClipAdded(item);
-                        Logger.Info("剪贴板", $"捕获图片 format={item.Format} size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
+                        Logger.Info("剪贴板", $"捕获文本 len={text.Length}");
                     }
                 }
             }

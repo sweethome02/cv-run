@@ -317,10 +317,10 @@ public partial class MainWindow : Window
                     {
                         var bytes = Convert.FromBase64String(item.Content);
                         using var ms = new MemoryStream(bytes);
-                        var img = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
+                        var img = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
                         Clipboard.Clear();
                         Clipboard.SetImage(img);
-                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} size={img.PixelWidth}x{img.PixelHeight}");
+                        Logger.Info("粘贴", $"选中粘贴图片 size={img.PixelWidth}x{img.PixelHeight}");
                     }
                     catch (Exception ex)
                     {
