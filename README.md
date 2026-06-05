@@ -2,6 +2,11 @@
 
 [English](#english-version) | 简体中文
 
+![Version](https://img.shields.io/github/v/release/sweethome02/cv-run?color=blue)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+
 > 轻量级 WPF 粘贴板工具，支持文本/图片自动捕获、边缘吸附、快捷键呼出。
 
 ## ✨ 特性
@@ -14,10 +19,11 @@
 | 🔍 全文搜索 | 实时过滤文本剪贴板记录 |
 | 🖱 边缘吸附 | 面板可吸附到屏幕左/右/上三边 |
 | 🎯 悬浮指示器 | 面板隐藏后显示半透明指示器，点击/拖拽操作 |
-| 💾 本地持久化 | 使用 SQLite 数据库存储历史记录 |
-| 🖼 图片支持 | 自动捕获剪贴板图片，PNG 编码存储 |
-| 🔄 开机自启 | 支持开机自动启动 |
-| 📝 日志系统 | 按日记录操作日志，自动清理 7 天前文件 |
+| 💾 本地持久化 | 图片存文件到 `data/images/`，文本存 SQLite |
+| 🖼 图片支持 | 自动捕获图片，显示文件名，支持 JPG/PNG/GIF/BMP/TIFF |
+| 🔄 开机自启 | 支持开机自动启动，Exe 路径变化时自动更新注册表 |
+| 📝 日志系统 | 按日记录操作日志，启动时自动清理 7 天前文件 |
+| 🗑 自动清理 | 退出时自动删除未固定图片文件 |
 | 🎨 深色 UI | 深色主题，缩放动画过渡 |
 
 ## 🏗 架构
@@ -65,12 +71,20 @@ cv-run/
 
 ## 🚀 快速开始
 
-### 环境要求
+### 下载（推荐）
+
+从 [GitHub Releases](https://github.com/sweethome02/cv-run/releases) 下载最新版 `cv-run-v1.0.1.zip`，解压后直接运行 `ClipNestWpf.exe`。
+
+> 自发布版本包含 .NET 8 运行时，无需额外安装。
+
+### 从源码构建
+
+#### 环境要求
 
 - Windows 10/11
-- .NET 8.0 SDK 或运行时
+- .NET 8.0 SDK
 
-### 构建
+#### 构建
 
 ```bash
 cd ClipNestWpf
@@ -78,7 +92,7 @@ dotnet restore
 dotnet build -c Release
 ```
 
-### 运行
+#### 运行
 
 ```bash
 dotnet run
@@ -115,12 +129,17 @@ dotnet publish -c Release -r win-x64 --self-contained false -o publish
 
 ```
 data/
-├── clipnest.db              # SQLite 数据库
+├── clipnest.db              # SQLite 数据库（文本记录 + 图片索引）
+├── images/                  # 图片文件（按 id 命名，退出时自动清理未固定）
+│   ├── abc123.png
+│   ├── def456.jpg
+│   └── ...
 ├── clipnest-2025-01-15.log      # 当日操作日志
-├── clipnest-error-2025-01-15.log  # 错误日志
+└── clipnest-error-2025-01-15.log  # 错误日志
 ```
 
-> 日志文件自动清理 7 天前的记录。
+> 日志文件启动时自动清理 7 天前的记录。
+> 未固定的图片文件在退出软件时自动删除。
 
 ## 🔧 开发
 
@@ -160,10 +179,11 @@ A lightweight WPF clipboard manager with auto capture, edge snapping, and keyboa
 | 🔍 Full-text Search | Real-time filtering of text clipboard records |
 | 🖱 Edge Snapping | Panel can dock to the left, right, or top screen edge |
 | 🎯 Floating Indicator | Semi-transparent indicator shown when panel is hidden, click/drag to interact |
-| 💾 Local Persistence | SQLite database for history storage |
-| 🖼 Image Support | Auto-captures clipboard images, stored as PNG-encoded Base64 |
-| 🔄 Auto-start | Supports startup on Windows login |
-| 📝 Logging System | Daily operation logs with 7-day auto-cleanup |
+| 💾 Local Persistence | Images stored as files in `data/images/`, text in SQLite |
+| 🖼 Image Support | Auto-captures images with filename display, supports JPG/PNG/GIF/BMP/TIFF |
+| 🔄 Auto-start | Supports startup on Windows login, auto-updates registry on exe path change |
+| 📝 Logging System | Daily operation logs with 7-day auto-cleanup on startup |
+| 🗑 Auto Cleanup | Unpinned image files deleted on exit |
 | 🎨 Dark UI | Dark theme with scale-animation transitions |
 
 ## 🏗 Architecture
@@ -211,12 +231,20 @@ cv-run/
 
 ## 🚀 Quick Start
 
-### Requirements
+### Download (Recommended)
+
+Download the latest `cv-run-v1.0.1.zip` from [GitHub Releases](https://github.com/sweethome02/cv-run/releases), extract and run `ClipNestWpf.exe`.
+
+> Self-contained package includes .NET 8 runtime — no additional setup required.
+
+### Build from Source
+
+#### Requirements
 
 - Windows 10/11
-- .NET 8.0 SDK or Runtime
+- .NET 8.0 SDK
 
-### Build
+#### Build
 
 ```bash
 cd ClipNestWpf
@@ -224,7 +252,7 @@ dotnet restore
 dotnet build -c Release
 ```
 
-### Run
+#### Run
 
 ```bash
 dotnet run
@@ -261,12 +289,17 @@ The `data/` folder in the application directory stores all data:
 
 ```
 data/
-├── clipnest.db                  # SQLite database
-├── clipnest-2025-01-15.log      # Daily operation log
-├── clipnest-error-2025-01-15.log  # Error log
+├── clipnest.db                    # SQLite database (text records + image index)
+├── images/                        # Image files (named by id, unpinned auto-cleaned on exit)
+│   ├── abc123.png
+│   ├── def456.jpg
+│   └── ...
+├── clipnest-2025-01-15.log        # Daily operation log
+└── clipnest-error-2025-01-15.log  # Error log
 ```
 
-> Log files are auto-cleaned after 7 days.
+> Log files are auto-cleaned after 7 days on startup.
+> Unpinned image files are deleted when the application exits.
 
 ## 🔧 Development
 
