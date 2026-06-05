@@ -57,7 +57,22 @@ public partial class App : Application
         };
 
         SetupTray();
-        if (!IsAutoStartEnabled()) SetAutoStart(true);
+        // Sync auto-start: update if missing or pointing to a different exe
+        var currentPath = Environment.ProcessPath ?? "";
+        if (!IsAutoStartEnabled())
+        {
+            SetAutoStart(true);
+        }
+        else
+        {
+            // Verify the registered path still matches the current exe
+            var regPath = GetAutoStartPath();
+            if (!string.Equals(regPath, currentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                SetAutoStart(true);
+                Logger.Info("注册表", $"开机自启路径已更新: {currentPath}");
+            }
+        }
         _main.LoadItems();
         _main.Show();
         Logger.Info("启动", "粘贴板已启动");
@@ -121,6 +136,12 @@ public partial class App : Application
     {
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
         return key?.GetValue("ClipNest") != null;
+    }
+
+    static string? GetAutoStartPath()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+        return key?.GetValue("ClipNest") as string;
     }
 
     static void SetAutoStart(bool enabled)
