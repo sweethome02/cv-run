@@ -1,8 +1,6 @@
 # cv-run
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+[English](#english-version) | 简体中文
 
 > 轻量级 WPF 粘贴板工具，支持文本/图片自动捕获、边缘吸附、快捷键呼出。
 
@@ -26,13 +24,13 @@
 
 ```
 cv-run/
-├── App.xaml(.cs)          # 应用入口，系统托盘、剪贴板监听、全局热键
-├── MainWindow.xaml(.cs)   # 主面板窗口，列表展示、搜索、吸附逻辑
+├── App.xaml(.cs)              # 应用入口，系统托盘、剪贴板监听、全局热键
+├── MainWindow.xaml(.cs)       # 主面板窗口，列表展示、搜索、吸附逻辑
 ├── IndicatorWindow.xaml(.cs)  # 悬浮指示器，点击/拖拽交互
-├── Models.cs              # 数据模型 (ClipboardItem)
-├── Storage.cs             # SQLite 持久化层
-├── Logger.cs              # 日志工具 (按日记录 + 自动清理)
-├── NativeMethods.cs       # Windows API 封装 (热键/剪贴板监听/窗口)
+├── Models.cs                  # 数据模型 (ClipboardItem)
+├── Storage.cs                 # SQLite 持久化层
+├── Logger.cs                  # 日志工具 (按日记录 + 自动清理)
+├── NativeMethods.cs           # Windows API 封装 (热键/剪贴板监听/窗口)
 └── .gitignore
 ```
 
@@ -117,8 +115,8 @@ dotnet publish -c Release -r win-x64 --self-contained false -o publish
 
 ```
 data/
-├── clipnest.db          # SQLite 数据库
-├── clipnest-2025-01-15.log   # 当日操作日志
+├── clipnest.db              # SQLite 数据库
+├── clipnest-2025-01-15.log      # 当日操作日志
 ├── clipnest-error-2025-01-15.log  # 错误日志
 ```
 
@@ -141,6 +139,152 @@ data/
 | 热键 | 功能 |
 |------|------|
 | `Ctrl+`` | 切换面板显示/隐藏 |
+
+## 📄 License
+
+MIT
+
+---
+
+## English Version
+
+A lightweight WPF clipboard manager with auto capture, edge snapping, and keyboard shortcut support.
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📋 Auto Capture | Monitors clipboard changes and automatically saves text and images |
+| ⌨️ Keyboard Shortcut | `Ctrl+`` (backtick) to quickly toggle the panel |
+| 📌 Pin Records | Right-click to pin important items, immune to auto-cleanup |
+| 🔍 Full-text Search | Real-time filtering of text clipboard records |
+| 🖱 Edge Snapping | Panel can dock to the left, right, or top screen edge |
+| 🎯 Floating Indicator | Semi-transparent indicator shown when panel is hidden, click/drag to interact |
+| 💾 Local Persistence | SQLite database for history storage |
+| 🖼 Image Support | Auto-captures clipboard images, stored as PNG-encoded Base64 |
+| 🔄 Auto-start | Supports startup on Windows login |
+| 📝 Logging System | Daily operation logs with 7-day auto-cleanup |
+| 🎨 Dark UI | Dark theme with scale-animation transitions |
+
+## 🏗 Architecture
+
+```
+cv-run/
+├── App.xaml(.cs)              # App entry, system tray, clipboard monitoring, global hotkey
+├── MainWindow.xaml(.cs)       # Main panel window, list display, search, snapping logic
+├── IndicatorWindow.xaml(.cs)  # Floating indicator, click/drag interaction
+├── Models.cs                  # Data model (ClipboardItem)
+├── Storage.cs                 # SQLite persistence layer
+├── Logger.cs                  # Logging utility (daily logs + auto-cleanup)
+├── NativeMethods.cs           # Windows API wrappers (hotkey/clipboard/window)
+└── .gitignore
+```
+
+### Core Flow
+
+```
+[Clipboard Change] → WM_CLIPBOARDUPDATE → App.ReadClipboard()
+    ├── Text → Save text content
+    └── Image → PNG encode → Base64 storage
+
+[User Trigger] → Ctrl+` → App.TogglePanel()
+    ├── Floating mode → Show panel + scale-in animation
+    └── Docked mode → Show panel → Hide indicator
+
+[Panel Close] → Mouse leave / Drag away from edge
+    ├── Docked → Shrink back to indicator (left/right/top)
+    └── Floating → Panel stays visible
+```
+
+## 🛠 Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| **.NET 8.0** | Runtime framework |
+| **WPF** | UI framework |
+| **SQLite** | Local data storage |
+| **Windows API** | Clipboard monitoring, global hotkeys, window management |
+
+## 📦 Dependencies
+
+- Microsoft.Data.Sqlite (10.0.8)
+
+## 🚀 Quick Start
+
+### Requirements
+
+- Windows 10/11
+- .NET 8.0 SDK or Runtime
+
+### Build
+
+```bash
+cd ClipNestWpf
+dotnet restore
+dotnet build -c Release
+```
+
+### Run
+
+```bash
+dotnet run
+```
+
+Or publish and run directly:
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained false -o publish
+.\publish\ClipNestWpf.exe
+```
+
+## 📖 Usage
+
+### Basic Operations
+
+1. **Auto Capture** — Automatically monitors clipboard after startup, saves copied text or screenshots
+2. **Toggle Panel** — Press `Ctrl+`` or click the edge indicator
+3. **Paste Content** — Double-click an item to paste to current focus
+4. **Search** — Type text in the search box to filter records in real-time
+5. **Pin Records** — Right-click an item → Pin, immune to auto-cleanup
+6. **Delete** — Right-click → Delete, or click the ✕ button on the right
+7. **Clear All** — Click "Clear All" button to remove all unpinned records
+
+### Docking Mode
+
+- **Drag panel to screen edge** → Auto-snaps (left/right/top edges)
+- **Drag the indicator** → Moves docking position along the edge
+- **Drag indicator away from edge** → Switches to floating mode
+
+## 📁 Data Directory
+
+The `data/` folder in the application directory stores all data:
+
+```
+data/
+├── clipnest.db                  # SQLite database
+├── clipnest-2025-01-15.log      # Daily operation log
+├── clipnest-error-2025-01-15.log  # Error log
+```
+
+> Log files are auto-cleaned after 7 days.
+
+## 🔧 Development
+
+### Window Behavior
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| Panel Width | 400px | Max 800px |
+| Panel Height | 540px | Max 900px |
+| Clipboard Cache Limit | 500 items | Oldest auto-deleted when exceeded |
+| Snap Distance | 40px | Auto-snaps when window center is within this distance from edge |
+| Indicator Size | 32×64px | Scales to 0.8x floating, 1.0x on hover |
+
+### Hotkeys
+
+| Hotkey | Function |
+|--------|----------|
+| `Ctrl+`` | Toggle panel visibility |
 
 ## 📄 License
 
