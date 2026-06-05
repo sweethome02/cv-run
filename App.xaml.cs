@@ -202,12 +202,26 @@ public partial class App : Application
                 else if (Clipboard.ContainsImage())
                 {
                     var bmp = Clipboard.GetImage();
-                    if (bmp != null)
+                    if (bmp != null && bmp.PixelWidth > 0 && bmp.PixelHeight > 0)
                     {
                         using var ms = new MemoryStream();
-                        var encoder = SelectEncoder(bmp);
-                        encoder.Frames.Add(BitmapFrame.Create(bmp));
-                        encoder.Save(ms);
+                        BitmapEncoder encoder;
+                        try
+                        {
+                            encoder = SelectEncoder(bmp);
+                            encoder.Frames.Add(BitmapFrame.Create(bmp));
+                            encoder.Save(ms);
+                        }
+                        catch (Exception inner)
+                        {
+                            // Primary encoder failed — fall back to PNG (most compatible)
+                            Logger.Error("图片编码", $"主编码器失败 ({inner.Message})，回退到 PNG");
+                            ms.SetLength(0);
+                            encoder = new PngBitmapEncoder();
+                            encoder.Frames.Add(BitmapFrame.Create(bmp));
+                            encoder.Save(ms);
+                        }
+
                         var b64 = Convert.ToBase64String(ms.ToArray());
                         var item = new ClipboardItem
                         {
@@ -218,10 +232,14 @@ public partial class App : Application
                         };
                         _store.Save(item);
                         _main.OnClipAdded(item);
+                        Logger.Info("剪贴板", $"捕获图片 format={item.Format} size={bmp.PixelWidth}x{bmp.PixelHeight} encoded={ms.Length}B");
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error("ReadClipboard", ex.Message);
+            }
         });
     }
 

@@ -317,31 +317,15 @@ public partial class MainWindow : Window
                     {
                         var bytes = Convert.FromBase64String(item.Content);
                         using var ms = new MemoryStream(bytes);
-                        BitmapFrame img;
-                        switch (item.Format.ToLowerInvariant())
-                        {
-                            case "jpeg":
-                                img = JpegBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
-                                break;
-                            case "gif":
-                                img = GifBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
-                                break;
-                            case "bmp":
-                                img = BmpBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
-                                break;
-                            case "tiff":
-                                img = TiffBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
-                                break;
-                            case "png":
-                            default:
-                                img = PngBitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
-                                break;
-                        }
+                        var img = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default).Frames[0];
                         Clipboard.Clear();
                         Clipboard.SetImage(img);
-                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} len={bytes.Length}");
+                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} size={img.PixelWidth}x{img.PixelHeight}");
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("粘贴图片", ex.Message);
+                    }
                 }
                 else
                 {

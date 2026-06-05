@@ -10,6 +10,8 @@ public class Storage : IDisposable
     {
         _db = new SqliteConnection($"Data Source={path}");
         _db.Open();
+
+        // Create table (new DB) or migrate (old DB)
         using var cmd = _db.CreateCommand();
         cmd.CommandText = """
             CREATE TABLE IF NOT EXISTS items (
@@ -23,6 +25,18 @@ public class Storage : IDisposable
             CREATE INDEX IF NOT EXISTS idx_items_time ON items(created_at DESC);
             """;
         cmd.ExecuteNonQuery();
+
+        // Migration: add format column for DBs created before v2
+        try
+        {
+            using var migrate = _db.CreateCommand();
+            migrate.CommandText = "ALTER TABLE items ADD COLUMN format TEXT DEFAULT 'png'";
+            migrate.ExecuteNonQuery();
+        }
+        catch
+        {
+            // Column already exists — migration is a no-op
+        }
     }
 
     public void Save(ClipboardItem item)
