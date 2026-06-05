@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -316,38 +316,54 @@ public partial class MainWindow : Window
                 {
                     try
                     {
-                        BitmapSource img;
-
                         // Try file-based storage first, fall back to old base64
                         var filePath = Store.GetImageFullPath(item.Content);
+                        byte[] raw;
                         if (filePath != null)
-                        {
-                            // New: read from file
-                            var bytes = File.ReadAllBytes(filePath);
-                            using var ms = new MemoryStream(bytes);
-                            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-                            var frame = decoder.Frames[0];
-                            img = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
-                            img.Freeze();
-                            Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} file={item.Content} size={img.PixelWidth}x{img.PixelHeight}");
-                        }
+                            raw = File.ReadAllBytes(filePath);
                         else
-                        {
-                            // Old: base64 data
-                            var bytes = Convert.FromBase64String(item.Content);
-                            using var ms = new MemoryStream(bytes);
-                            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-                            var frame = decoder.Frames[0];
-                            img = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
-                            img.Freeze();
-                            Logger.Info("粘贴", $"选中粘贴图片 (旧数据) size={img.PixelWidth}x{img.PixelHeight}");
-                        }
+                            raw = Convert.FromBase64String(item.Content);
 
-                        // Re-ignore clipboard changes right before we set the image,
-                        // because MarkSelfSetting at the top may have already expired
+                        // Decode from bytes
+                        using var readMs = new MemoryStream(raw);
+                        var decoder = BitmapDecoder.Create(readMs, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                        var frame = decoder.Frames[0];
+
+                        // Convert to Bgra32 + re-encode to BMP (Win32 native clipboard)
+                        var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+                        using var writeMs = new MemoryStream();
+                        var bmpEncoder = new BmpBitmapEncoder();
+                        bmpEncoder.Frames.Add(BitmapFrame.Create(converted));
+                        bmpEncoder.Save(writeMs);
+                        var bmpBytes = writeMs.ToArray();
+
+                        using var bmpMs = new MemoryStream(bmpBytes);
+                        var bmpDecoder = BitmapDecoder.Create(bmpMs, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                        var final = bmpDecoder.Frames[0];
+                        final.Freeze();
+
+                        // Save a temp PNG so File Explorer can paste via CF_HDROP
+                        var tempDir = Path.Combine(Store.ImageDir, "temp");
+                        Directory.CreateDirectory(tempDir);
+                        var tempName = item.Name;
+                        if (string.IsNullOrEmpty(tempName))
+                            tempName = "clip_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".png";
+                        var tempPath = Path.Combine(tempDir, tempName);
+                        if (!tempPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                            !tempPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) &&
+                            !tempPath.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+                            !tempPath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) &&
+                            !tempPath.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
+                            tempPath += ".png";
+                        File.WriteAllBytes(tempPath, raw);
+
+                        // Write both Bitmap + FileDrop to clipboard
+                        var dataObj = new System.Windows.DataObject();
+                        dataObj.SetImage(final);
+                        dataObj.SetFileDropList(new System.Collections.Specialized.StringCollection { tempPath });
                         ((App)Application.Current).MarkSelfSetting();
-                        Clipboard.Clear();
-                        Clipboard.SetImage(img);
+                        Clipboard.SetDataObject(dataObj, true);
+                        Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} size={final.PixelWidth}x{final.PixelHeight}");
                     }
                     catch (Exception ex)
                     {
@@ -356,18 +372,15 @@ public partial class MainWindow : Window
                 }
                 else
                 {
+                    ((App)Application.Current).MarkSelfSetting();
                     Clipboard.SetText(item.Content);
                     Logger.Info("粘贴", $"选中粘贴: \"{Truncate(item.Content, 40)}\"");
                 }
 
                 if (Docked != DockEdge.None)
-                {
                     HidePanel();
-                }
                 else
-                {
                     Logger.Info("粘贴", "浮动模式，面板保持显示");
-                }
 
                 var pt = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
                 pt.Tick += (_, _) => { pt.Stop(); System.Windows.Forms.SendKeys.SendWait("^v"); };

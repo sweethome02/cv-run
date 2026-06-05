@@ -1,4 +1,5 @@
-using System.IO;
+﻿using System.IO;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 
 namespace ClipNestWpf;
@@ -6,6 +7,9 @@ namespace ClipNestWpf;
 public class Storage : IDisposable
 {
     readonly SqliteConnection _db;
+
+    /// <summary>Directory where captured images are stored (data/images).</summary>
+    public string ImageDir => _imageDir;
     readonly string _imageDir;
 
     public Storage(string dbPath, string imageDir)
@@ -138,6 +142,28 @@ public class Storage : IDisposable
         if (string.IsNullOrEmpty(content)) return null;
         var path = Path.Combine(_imageDir, content);
         return File.Exists(path) ? path : null;
+    }
+
+    public static string SanitizeFileName(string name)
+    {
+        var inv = Path.GetInvalidFileNameChars();
+        var clean = new string(name.Select(c => inv.Contains(c) ? '_' : c).ToArray());
+        return string.IsNullOrWhiteSpace(clean) ? "clip.png" : clean;
+    }
+
+    public void ClearTempPasteFiles()
+    {
+        try
+        {
+            var tempDir = Path.Combine(_imageDir, "temp");
+            if (Directory.Exists(tempDir))
+            {
+                foreach (var f in Directory.GetFiles(tempDir, "*.*"))
+                    try { File.Delete(f); } catch { }
+                try { Directory.Delete(tempDir); } catch { }
+            }
+        }
+        catch { }
     }
 
     public void ClearTemp()

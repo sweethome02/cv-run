@@ -310,6 +310,7 @@ public partial class App : Application
     public void OnSystemShutdown()
     {
         Logger.Info("退出", "系统关机，清除未固定记录");
+        _store.ClearTempPasteFiles();
         _store.ClearTemp();
         _store.Dispose();
     }
@@ -319,6 +320,8 @@ public partial class App : Application
         NativeMethods.RemoveClipboardFormatListener(_hwnd);
         NativeMethods.UnregisterHotKey(_hwnd, NativeMethods.HOTKEY_ID);
         _tray?.Dispose();
+        _store.ClearTempPasteFiles();
+        _store.ClearTempPasteFiles();
         _store.ClearTemp();
         _store.Dispose();
         Logger.Info("退出", "粘贴板已关闭");
