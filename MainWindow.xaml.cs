@@ -317,9 +317,20 @@ public partial class MainWindow : Window
                     try
                     {
                         var bytes = Convert.FromBase64String(item.Content);
-                        using var ms = new MemoryStream(bytes);
-                        var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                        var img = decoder.Frames[0];
+                        BitmapSource img;
+
+                        using (var ms = new MemoryStream(bytes))
+                        {
+                            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                            var frame = decoder.Frames[0];
+
+                            // Convert to standard 32-bit RGBA and freeze —
+                            // works for any source format (JPEG/PNG/GIF/BMP/TIFF)
+                            // and creates an independent pixel buffer
+                            img = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+                            img.Freeze();
+                        }
+
                         Clipboard.Clear();
                         Clipboard.SetImage(img);
                         Logger.Info("粘贴", $"选中粘贴图片 format={item.Format} size={img.PixelWidth}x{img.PixelHeight}");

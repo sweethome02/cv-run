@@ -148,8 +148,9 @@ public partial class App : Application
     {
         if (msg == NativeMethods.WM_CLIPBOARDUPDATE)
         {
-            // WndProc runs on UI thread — no Dispatcher.Invoke needed.
-            ReadClipboard();
+            // Dispatch asynchronously to avoid reentrancy issues
+            // (accessing clipboard inside a clipboard notification can deadlock)
+            Dispatcher.InvokeAsync(() => ReadClipboard());
             handled = true;
         }
         else if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == NativeMethods.HOTKEY_ID)
